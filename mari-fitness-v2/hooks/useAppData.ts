@@ -23,6 +23,7 @@ import {
   getSessionExerciseDetails,
   getTrainingSessionSummaries,
   reconcileTrainingLogPRs,
+  validateExerciseSets,
 } from "../utils/training";
 import {
   getDayOfWeekWorkout,
@@ -120,6 +121,7 @@ export function useAppData() {
       sets: SetRecord[]
     ): Promise<ExerciseLog | undefined> => {
       if (!data) return undefined;
+      if (!validateExerciseSets(sets).ok) return undefined;
       const today = todayKey();
       const logs = [...data.trainingLogs];
       const idx = logs.findIndex((l) => l.date === today && l.workoutId === workoutId);

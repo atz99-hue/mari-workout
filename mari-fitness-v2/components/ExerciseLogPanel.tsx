@@ -4,7 +4,15 @@ import { PrimaryButton } from "./PrimaryButton";
 import { ComparisonBadge } from "./ComparisonBadge";
 import { borderRadius, colors, spacing, typography } from "../constants/theme";
 import { ExerciseLog, SetRecord } from "../types";
-import { compareExercise, createEmptySets, parseTargetSetCount } from "../utils/training";
+import {
+  compareExercise,
+  createEmptySets,
+  parseRepsInput,
+  parseTargetSetCount,
+  parseWeightInput,
+  sanitizeWeightInput,
+  validateExerciseSets,
+} from "../utils/training";
 
 type Props = {
   exerciseId: string;
@@ -29,22 +37,6 @@ function formatWeightInput(weightKg: number): string {
   return String(weightKg);
 }
 
-function sanitizeWeightInput(value: string): string {
-  const cleaned = value.replace(/[^0-9.]/g, "");
-  const dotIndex = cleaned.indexOf(".");
-  if (dotIndex === -1) return cleaned;
-  const intPart = cleaned.slice(0, dotIndex);
-  const decPart = cleaned.slice(dotIndex + 1).replace(/\./g, "");
-  return `${intPart}.${decPart}`;
-}
-
-function parseWeightInput(input: string): number {
-  const trimmed = input.trim();
-  if (!trimmed || trimmed === ".") return 0;
-  const num = parseFloat(trimmed);
-  return Number.isFinite(num) ? num : 0;
-}
-
 function recordsToDrafts(sets: SetRecord[]): SetDraft[] {
   return sets.map((s) => ({
     setNumber: s.setNumber,
@@ -66,7 +58,7 @@ function createEmptyDrafts(count: number): SetDraft[] {
 function draftsToRecords(drafts: SetDraft[]): SetRecord[] {
   return drafts.map((d) => {
     const weightKg = parseWeightInput(d.weightInput);
-    const reps = Number(d.reps) || 0;
+    const reps = parseRepsInput(String(d.reps || ""));
     return {
       setNumber: d.setNumber,
       weightKg,
@@ -123,7 +115,7 @@ export function ExerciseLogPanel({
   };
 
   const updateReps = (index: number, value: string) => {
-    const reps = parseInt(value, 10) || 0;
+    const reps = parseRepsInput(value);
     setFeedback(null);
     setSets((prev) =>
       prev.map((s, i) => (i === index ? { ...s, reps } : s))
@@ -156,9 +148,9 @@ export function ExerciseLogPanel({
 
   const handleSave = async () => {
     const normalized = renumberRecords(draftsToRecords(sets));
-    const hasValid = normalized.some((s) => s.reps > 0);
-    if (!hasValid) {
-      setFeedback({ type: "error", message: "1セット以上、回数を入力してください" });
+    const validation = validateExerciseSets(normalized);
+    if (!validation.ok) {
+      setFeedback({ type: "error", message: validation.message });
       return;
     }
 

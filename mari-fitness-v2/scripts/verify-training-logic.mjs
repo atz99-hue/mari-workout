@@ -1,14 +1,14 @@
 /** トレーニングロジックの手動検証（保存処理・データ構造は触らない） */
 
 function estimate1RM(weightKg, reps) {
-  if (weightKg <= 0 || reps <= 0) return 0;
+  if (weightKg <= 0 || weightKg > 500 || reps < 1 || reps > 30) return 0;
   return Math.round(weightKg * (1 + reps / 30) * 10) / 10;
 }
 
 function getBest1RMFromSets(sets) {
   let best = 0;
   for (const s of sets) {
-    if (s.completed && s.weightKg > 0 && s.reps > 0) {
+    if (s.completed && s.weightKg > 0 && s.weightKg <= 500 && s.reps >= 1 && s.reps <= 30) {
       best = Math.max(best, estimate1RM(s.weightKg, s.reps));
     }
   }
@@ -56,7 +56,23 @@ assert("2回目で更新はPR", buildIsPR(110, 100, 0));
 assert("同日再保存で未更新は非PR", !buildIsPR(105, 100, 105));
 assert("同日再保存で更新はPR", buildIsPR(112, 100, 110));
 
-const failed = tests.filter((t) => !t.pass);
+function validateReps(reps) {
+  return Number.isInteger(reps) && reps >= 1 && reps <= 30;
+}
+function isOutlier(repList) {
+  const reps = [...repList].sort((a, b) => a - b);
+  if (reps.length < 2) return false;
+  const max = reps[reps.length - 1];
+  const next = reps[reps.length - 2];
+  return max > next * 2 && max - next >= 10;
+}
+assert("回数30は可", validateReps(30));
+assert("回数50は不可", !validateReps(50));
+assert("50×50は1RMに使わない", estimate1RM(50, 50) === 0);
+assert("10/10/50は外れ値", isOutlier([10, 10, 50]));
+assert("10/10/12は外れ値でない", !isOutlier([10, 10, 12]));
+
+const failed = tests.filter((t) => t.pass === false);
 for (const t of tests) {
   console.log(`${t.pass ? "OK" : "FAIL"}: ${t.name}`);
 }

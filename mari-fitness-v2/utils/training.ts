@@ -8,10 +8,96 @@ import {
 } from "../types";
 import { getExerciseNameById, getWorkoutById } from "../constants/workouts";
 
-/** Epley式: 推定1RM = 重量 × (1 + 回数/30) */
+export const MIN_REPS = 1;
+export const MAX_REPS = 30;
+export const MAX_WEIGHT_KG = 500;
+
+/** Epley式: 推定1RM = 重量 × (1 + 回数/30)。正常範囲のセットのみ計算する */
 export function estimate1RM(weightKg: number, reps: number): number {
-  if (weightKg <= 0 || reps <= 0) return 0;
+  if (!isValidSetFor1RM({ weightKg, reps, completed: true })) return 0;
   return Math.round(weightKg * (1 + reps / 30) * 10) / 10;
+}
+
+export function parseRepsInput(value: string): number {
+  const digits = value.replace(/[^0-9]/g, "");
+  if (!digits) return 0;
+  const n = parseInt(digits, 10);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(MAX_REPS, n);
+}
+
+export function sanitizeWeightInput(value: string): string {
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  const dotIndex = cleaned.indexOf(".");
+  const normalized =
+    dotIndex === -1
+      ? cleaned
+      : `${cleaned.slice(0, dotIndex)}.${cleaned.slice(dotIndex + 1).replace(/\./g, "")}`;
+  const parsed = parseWeightInput(normalized);
+  if (parsed > MAX_WEIGHT_KG) return String(MAX_WEIGHT_KG);
+  return normalized;
+}
+
+export function parseWeightInput(input: string): number {
+  const trimmed = input.trim();
+  if (!trimmed || trimmed === ".") return 0;
+  const num = parseFloat(trimmed);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(MAX_WEIGHT_KG, num);
+}
+
+/** 推定1RMに使う完了セット（回数 1〜30、重量 0超〜500） */
+export function isValidSetFor1RM(
+  set: Pick<SetRecord, "weightKg" | "reps" | "completed">
+): boolean {
+  return (
+    set.completed &&
+    set.weightKg > 0 &&
+    set.weightKg <= MAX_WEIGHT_KG &&
+    set.reps >= MIN_REPS &&
+    set.reps <= MAX_REPS
+  );
+}
+
+function hasOutlierReps(sets: SetRecord[]): boolean {
+  const reps = sets
+    .filter((s) => s.reps >= MIN_REPS)
+    .map((s) => s.reps)
+    .sort((a, b) => a - b);
+  if (reps.length < 2) return false;
+  const max = reps[reps.length - 1];
+  const next = reps[reps.length - 2];
+  return max > next * 2 && max - next >= 10;
+}
+
+export function validateExerciseSets(
+  sets: SetRecord[]
+): { ok: true } | { ok: false; message: string } {
+  if (!sets.some((s) => s.reps > 0)) {
+    return { ok: false, message: "1セット以上、回数を入力してください" };
+  }
+
+  for (const s of sets) {
+    if (s.reps === 0 && s.weightKg === 0) continue;
+    if (s.reps < 0 || s.reps > MAX_REPS) {
+      return { ok: false, message: `回数は${MIN_REPS}〜${MAX_REPS}回で入力してください` };
+    }
+    if (s.reps > 0 && s.reps < MIN_REPS) {
+      return { ok: false, message: `回数は${MIN_REPS}〜${MAX_REPS}回で入力してください` };
+    }
+    if (s.weightKg < 0 || s.weightKg > MAX_WEIGHT_KG) {
+      return { ok: false, message: `重量は${MAX_WEIGHT_KG}kg以下で入力してください` };
+    }
+  }
+
+  if (hasOutlierReps(sets)) {
+    return {
+      ok: false,
+      message: "セット間の回数差が大きすぎます。入力を確認してください",
+    };
+  }
+
+  return { ok: true };
 }
 
 export function parseTargetSetCount(setsLabel?: string): number {
@@ -34,7 +120,7 @@ export function createEmptySets(count: number): SetRecord[] {
 export function getBest1RMFromSets(sets: SetRecord[]): number {
   let best = 0;
   for (const s of sets) {
-    if (s.completed && s.weightKg > 0 && s.reps > 0) {
+    if (isValidSetFor1RM(s)) {
       best = Math.max(best, estimate1RM(s.weightKg, s.reps));
     }
   }
@@ -44,8 +130,8 @@ export function getBest1RMFromSets(sets: SetRecord[]): number {
 export function getBestSet(sets: SetRecord[]): { weightKg: number; reps: number } | undefined {
   let best: { weightKg: number; reps: number; rm: number } | undefined;
   for (const s of sets) {
-    if (!s.completed || s.reps <= 0) continue;
-    const rm = s.weightKg > 0 ? estimate1RM(s.weightKg, s.reps) : 0;
+    if (!isValidSetFor1RM(s)) continue;
+    const rm = estimate1RM(s.weightKg, s.reps);
     if (!best || rm > best.rm) {
       best = { weightKg: s.weightKg, reps: s.reps, rm };
     }
@@ -185,8 +271,8 @@ export function buildExerciseLog(
   const previousEstimated1RM = previous?.estimated1RM;
   const rm = estimated1RM > 0 ? estimated1RM : undefined;
   const priorBest1RM = getPriorBest1RM(logs, exerciseId);
-  const isPR =
-    priorBest1RM > 0 && rm !== undefined && rm > priorBest1RM;
+  /** 初回記録は PR にしない。過去最高がある場合のみ、それを超えたら PR */
+  const isPR = priorBest1RM > 0 && rm !== undefined && rm > priorBest1RM;
 
   return {
     exerciseId,
