@@ -25,7 +25,7 @@ export const AVATAR_ASSETS = {
   mari_trainer: {
     role: "mari_trainer",
     /** 小虎のマリトレーナー。female_user / male_user とは別 asset */
-    source: require("../assets/scenes/MARI_FITNESS_scene_3.webp"),
+    source: require("../assets/avatars/mari_trainer.webp"),
     resizeMode: "contain",
   },
 } as const satisfies Record<AvatarRole, AvatarAssetDef>;
