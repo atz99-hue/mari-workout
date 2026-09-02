@@ -1,15 +1,18 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { GradientBackground } from "../components/GradientBackground";
 import { HomeBottomNav } from "../components/HomeBottomNav";
-import { MariAvatar } from "../components/MariAvatar";
 import { MariFitnessLogo } from "../components/MariFitnessLogo";
 import { PremiumCard } from "../components/PremiumCard";
 import { ProgressRing } from "../components/ProgressRing";
-import { UserAvatar } from "../components/UserAvatar";
 import { borderRadius, colors, gradients, shadows, spacing, typography } from "../constants/theme";
 import { todayKey } from "../storage";
 import { AppSettings, MealEntry, ScreenName, WeightEntry, Workout } from "../types";
+
+/** WELCOME BACK 専用。avatars/ の mari_trainer・male_user・female_user は使わない */
+const WELCOME_MARI = require("../assets/home/welcome_mari.png");
+const WELCOME_USER = require("../assets/home/welcome_user_male.png");
+const WELCOME_MARI_AVATAR = require("../assets/home/welcome_mari_avatar.png");
 
 type Props = {
   onNavigate: (screen: ScreenName) => void;
@@ -132,30 +135,49 @@ export function HomeScreen({
           </View>
         </View>
 
-        {/* 2. Welcome */}
+        {/* 2. Welcome — Canonical: assets/reference/welcome_back_canonical.png */}
         <View style={styles.welcomeCard}>
-          <LinearGradient
-            colors={["rgba(107,92,231,0.18)", "rgba(18,18,26,0.95)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.welcomeGradient}
-          >
-            <View style={styles.welcomeTextCol}>
+          <View style={styles.welcomeHero}>
+            <View style={styles.welcomePurpleGlow} pointerEvents="none" />
+
+            <Image
+              source={WELCOME_MARI}
+              style={styles.welcomeMari}
+              resizeMode="cover"
+              accessibilityLabel="小虎のマリトレーナー"
+            />
+            <Image
+              source={WELCOME_USER}
+              style={styles.welcomeUser}
+              resizeMode="cover"
+              accessibilityLabel="ユーザー"
+            />
+
+            <View style={styles.welcomeSpeech} pointerEvents="none">
+              <Text style={styles.welcomeSpeechText}>
+                今日もいい{"\n"}スタートだね！{"\n"}この調子でいこう！
+              </Text>
+            </View>
+
+            <View style={styles.welcomeCopy} pointerEvents="none">
               <Text style={styles.welcomeLabel}>WELCOME BACK</Text>
               <Text style={styles.welcomeName}>{settings.userName}</Text>
               <Text style={styles.welcomeMessage}>今日も理想の身体へ。</Text>
-            </View>
-            <View style={styles.avatarRow}>
-              <View style={styles.avatarSlot}>
-                <UserAvatar name={settings.userName} gender={settings.userGender} size={52} />
-                <Text style={styles.avatarCaption}>YOU</Text>
+              <View style={styles.welcomeCallout}>
+                <Image
+                  source={WELCOME_MARI_AVATAR}
+                  style={styles.welcomeCalloutAvatar}
+                  resizeMode="cover"
+                  accessibilityLabel="小虎マリ"
+                />
+                <View style={styles.welcomeCalloutBubble}>
+                  <Text style={styles.welcomeCalloutText}>
+                    小虎のマリトレーナーと一緒に頑張ろう！
+                  </Text>
+                </View>
               </View>
-              <View style={styles.avatarSlot}>
-                <MariAvatar size={52} />
-                <Text style={[styles.avatarCaption, styles.avatarCaptionMari]}>MARI</Text>
-              </View>
             </View>
-          </LinearGradient>
+          </View>
         </View>
 
         {/* 3. 今日の達成度 */}
@@ -312,59 +334,136 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
 
-  /* Welcome */
+  /* Welcome — canonical welcome_back_canonical.png */
   welcomeCard: {
     borderRadius: borderRadius.xl,
     overflow: "hidden",
+    marginHorizontal: -spacing.lg,
     marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: "rgba(107,92,231,0.25)",
-    ...shadows.card,
+    backgroundColor: "#05050C",
   },
-  welcomeGradient: {
-    padding: spacing.lg,
-    flexDirection: "row",
+  welcomeHero: {
+    height: 318,
+    width: "100%",
+    overflow: "hidden",
+    backgroundColor: "#05050C",
+  },
+  welcomePurpleGlow: {
+    position: "absolute",
+    top: 36,
+    left: "22%",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(120, 60, 200, 0.28)",
+  },
+  welcomeMari: {
+    position: "absolute",
+    left: -6,
+    bottom: 0,
+    width: "42%",
+    height: "100%",
+    zIndex: 2,
+  },
+  welcomeUser: {
+    position: "absolute",
+    right: -10,
+    bottom: 0,
+    width: "40%",
+    height: "100%",
+    zIndex: 2,
+  },
+  welcomeCopy: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 36,
     alignItems: "center",
-    justifyContent: "space-between",
-  },
-  welcomeTextCol: {
-    flex: 1,
-    paddingRight: spacing.md,
+    zIndex: 3,
+    paddingHorizontal: 92,
   },
   welcomeLabel: {
     ...typography.label,
-    color: colors.accent,
-    marginBottom: spacing.xs,
+    color: colors.gold,
+    letterSpacing: 2.4,
+    fontSize: 12,
+    marginBottom: 8,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.85)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
   welcomeName: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: colors.text,
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
+    fontSize: 34,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.4,
+    marginBottom: 8,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.9)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
   welcomeMessage: {
-    ...typography.subtitle,
-    color: colors.textMuted,
-    lineHeight: 22,
+    fontSize: 13,
+    fontWeight: "400",
+    color: "#FFFFFF",
+    lineHeight: 20,
+    textAlign: "center",
+    marginBottom: 12,
+    textShadowColor: "rgba(0,0,0,0.85)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
   },
-  avatarRow: {
+  welcomeSpeech: {
+    position: "absolute",
+    left: 8,
+    bottom: 28,
+    zIndex: 4,
+    backgroundColor: "rgba(28, 10, 52, 0.94)",
+    borderWidth: 1,
+    borderColor: "rgba(168, 90, 255, 0.8)",
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    maxWidth: 128,
+  },
+  welcomeSpeechText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
+  welcomeCallout: {
     flexDirection: "row",
-    gap: spacing.md,
-    alignItems: "flex-end",
-  },
-  avatarSlot: {
     alignItems: "center",
-    gap: spacing.xs,
+    maxWidth: 220,
   },
-  avatarCaption: {
-    ...typography.caption,
-    color: colors.accent,
-    letterSpacing: 1.2,
-    fontSize: 9,
+  welcomeCalloutAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderColor: "rgba(186, 120, 255, 0.95)",
+    backgroundColor: "#1A1030",
+    zIndex: 1,
   },
-  avatarCaptionMari: {
-    color: colors.gold,
+  welcomeCalloutBubble: {
+    marginLeft: -8,
+    paddingLeft: 16,
+    paddingRight: 12,
+    paddingVertical: 8,
+    backgroundColor: "rgba(42, 18, 72, 0.94)",
+    borderWidth: 1,
+    borderColor: "rgba(168, 90, 255, 0.75)",
+    borderRadius: 16,
+    maxWidth: 186,
+  },
+  welcomeCalloutText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "600",
+    lineHeight: 14,
   },
 
   /* Achievement */
