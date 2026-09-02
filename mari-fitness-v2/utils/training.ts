@@ -33,8 +33,8 @@ export function sanitizeWeightInput(value: string): string {
     dotIndex === -1
       ? cleaned
       : `${cleaned.slice(0, dotIndex)}.${cleaned.slice(dotIndex + 1).replace(/\./g, "")}`;
-  const parsed = parseWeightInput(normalized);
-  if (parsed > MAX_WEIGHT_KG) return String(MAX_WEIGHT_KG);
+  const raw = parseFloat(normalized);
+  if (Number.isFinite(raw) && raw > MAX_WEIGHT_KG) return String(MAX_WEIGHT_KG);
   return normalized;
 }
 
