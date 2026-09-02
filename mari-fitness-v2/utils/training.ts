@@ -358,12 +358,16 @@ export function compareExercise(
   };
 }
 
+export function isFinitePositiveNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 export function get1RMHistory(logs: TrainingLog[], exerciseId: string): OneRMHistoryEntry[] {
   const reconciled = reconcileTrainingLogPRs(logs);
   const entries: OneRMHistoryEntry[] = [];
   for (const log of reconciled) {
     const ex = log.exerciseLogs?.find((e) => e.exerciseId === exerciseId);
-    if (!ex?.estimated1RM) continue;
+    if (!isFinitePositiveNumber(ex?.estimated1RM)) continue;
     const bestSet = getBestSet(ex.sets) ?? { weightKg: 0, reps: 0 };
     entries.push({
       date: log.date,
@@ -373,6 +377,69 @@ export function get1RMHistory(logs: TrainingLog[], exerciseId: string): OneRMHis
     });
   }
   return entries.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export type ExerciseGrowthSummary = {
+  best1RM?: number;
+  bestWeightKg?: number;
+  bestReps?: number;
+  comparison: ExerciseComparison;
+  prHistory: OneRMHistoryEntry[];
+  chartHistory: OneRMHistoryEntry[];
+};
+
+/** 成長画面用の集計。保存・PR判定ロジックは変更しない */
+export function getExerciseGrowthSummary(
+  oneRMHistory: OneRMHistoryEntry[],
+  detailHistory: { log: ExerciseLog }[]
+): ExerciseGrowthSummary {
+  const chartHistory = oneRMHistory.filter((e) => isFinitePositiveNumber(e.estimated1RM));
+  const best1RMRaw = chartHistory.reduce((max, e) => Math.max(max, e.estimated1RM), 0);
+  const best1RM = best1RMRaw > 0 ? best1RMRaw : undefined;
+
+  let bestWeightKg = 0;
+  let bestReps = 0;
+  for (const { log } of detailHistory) {
+    for (const s of log.sets ?? []) {
+      if (!s.completed) continue;
+      if (!Number.isFinite(s.reps) || !Number.isFinite(s.weightKg)) continue;
+      if (s.reps < MIN_REPS || s.reps > MAX_REPS) continue;
+      if (s.weightKg < 0 || s.weightKg > MAX_WEIGHT_KG) continue;
+      bestReps = Math.max(bestReps, s.reps);
+      if (s.weightKg > 0) bestWeightKg = Math.max(bestWeightKg, s.weightKg);
+    }
+  }
+
+  const latest = chartHistory[chartHistory.length - 1];
+  const previous = chartHistory.length >= 2 ? chartHistory[chartHistory.length - 2] : undefined;
+  const comparison = compareExercise(
+    latest
+      ? {
+          exerciseId: "",
+          exerciseName: "",
+          sets: [],
+          estimated1RM: latest.estimated1RM,
+          isPR: latest.isPR,
+        }
+      : undefined,
+    previous
+      ? {
+          exerciseId: "",
+          exerciseName: "",
+          sets: [],
+          estimated1RM: previous.estimated1RM,
+        }
+      : undefined
+  );
+
+  return {
+    best1RM,
+    bestWeightKg: bestWeightKg > 0 ? bestWeightKg : undefined,
+    bestReps: bestReps > 0 ? bestReps : undefined,
+    comparison,
+    prHistory: [...chartHistory].filter((e) => e.isPR).reverse(),
+    chartHistory,
+  };
 }
 
 export function getExerciseLogsForHistory(

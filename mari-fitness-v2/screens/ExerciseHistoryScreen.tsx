@@ -1,18 +1,16 @@
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
+import { ComparisonBadge } from "../components/ComparisonBadge";
 import { ScreenLayout, Section } from "../components/ScreenLayout";
 import { borderRadius, colors, spacing, typography } from "../constants/theme";
-import { OneRMHistoryEntry } from "../types";
+import { ExerciseLog, OneRMHistoryEntry } from "../types";
 import { formatDate } from "../utils/date";
+import { getExerciseGrowthSummary, isFinitePositiveNumber } from "../utils/training";
 
 type HistoryEntry = {
   date: string;
   workoutId: string;
-  log: {
-    estimated1RM?: number;
-    isPR?: boolean;
-    sets: { setNumber: number; weightKg: number; reps: number; completed: boolean }[];
-  };
+  log: ExerciseLog;
 };
 
 type Props = {
@@ -23,7 +21,8 @@ type Props = {
 };
 
 function Mini1RMChart({ data }: { data: OneRMHistoryEntry[] }) {
-  if (data.length < 2) {
+  const values = data.map((d) => d.estimated1RM).filter(isFinitePositiveNumber);
+  if (values.length < 2) {
     return (
       <View style={chartStyles.empty}>
         <Text style={chartStyles.emptyText}>2回以上記録するとグラフが表示されます</Text>
@@ -34,16 +33,26 @@ function Mini1RMChart({ data }: { data: OneRMHistoryEntry[] }) {
   const width = 300;
   const height = 120;
   const pad = 16;
-  const values = data.map((d) => d.estimated1RM);
   const min = Math.min(...values) * 0.95;
   const max = Math.max(...values) * 1.05;
   const span = max - min || 1;
 
-  const points = data.map((d, i) => {
-    const x = pad + (i / (data.length - 1)) * (width - pad * 2);
-    const y = pad + (height - pad * 2) - ((d.estimated1RM - min) / span) * (height - pad * 2);
-    return { x, y, d };
-  });
+  const points = data
+    .filter((d) => isFinitePositiveNumber(d.estimated1RM))
+    .map((d, i, arr) => {
+      const x = pad + (i / (arr.length - 1)) * (width - pad * 2);
+      const y = pad + (height - pad * 2) - ((d.estimated1RM - min) / span) * (height - pad * 2);
+      return { x, y, d };
+    })
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+
+  if (points.length < 2) {
+    return (
+      <View style={chartStyles.empty}>
+        <Text style={chartStyles.emptyText}>2回以上記録するとグラフが表示されます</Text>
+      </View>
+    );
+  }
 
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
@@ -52,9 +61,9 @@ function Mini1RMChart({ data }: { data: OneRMHistoryEntry[] }) {
       <Text style={chartStyles.label}>推定1RM 推移</Text>
       <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
         <Path d={linePath} stroke={colors.gold} strokeWidth={2.5} fill="none" />
-        {points.map((p) => (
+        {points.map((p, i) => (
           <Circle
-            key={p.d.date}
+            key={`${p.d.date}-${i}`}
             cx={p.x}
             cy={p.y}
             r={p.d.isPR ? 5 : 4}
@@ -90,27 +99,98 @@ const chartStyles = StyleSheet.create({
   },
 });
 
+function StatTile({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  return (
+    <View style={styles.statTile}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>
+        {value}
+        {unit ? <Text style={styles.statUnit}> {unit}</Text> : null}
+      </Text>
+    </View>
+  );
+}
+
+function formatSetLine(sets: HistoryEntry["log"]["sets"]): string {
+  return (
+    sets
+      .filter((s) => s.completed && s.reps > 0 && Number.isFinite(s.reps) && Number.isFinite(s.weightKg))
+      .map((s) => (s.weightKg > 0 ? `${s.weightKg}kg×${s.reps}` : `${s.reps}回`))
+      .join(" / ") || "—"
+  );
+}
+
 export function ExerciseHistoryScreen({
   onBack,
   exerciseName,
   oneRMHistory,
   detailHistory,
 }: Props) {
-  const best = oneRMHistory.reduce((max, e) => Math.max(max, e.estimated1RM), 0);
+  const growth = getExerciseGrowthSummary(oneRMHistory, detailHistory);
 
   return (
     <ScreenLayout title="Growth" subtitle={exerciseName} onBack={onBack}>
-      {best > 0 ? (
+      {growth.best1RM ? (
         <View style={styles.hero}>
           <Text style={styles.heroLabel}>BEST 1RM</Text>
           <Text style={styles.heroValue}>
-            {best}
+            {growth.best1RM}
             <Text style={styles.heroUnit}> kg</Text>
           </Text>
         </View>
       ) : null}
 
-      <Mini1RMChart data={oneRMHistory} />
+      <View style={styles.statRow}>
+        <StatTile
+          label="最高重量"
+          value={growth.bestWeightKg != null ? String(growth.bestWeightKg) : "—"}
+          unit={growth.bestWeightKg != null ? "kg" : undefined}
+        />
+        <StatTile
+          label="最高回数"
+          value={growth.bestReps != null ? String(growth.bestReps) : "—"}
+          unit={growth.bestReps != null ? "回" : undefined}
+        />
+        <StatTile label="PR" value={String(growth.prHistory.length)} unit="回" />
+      </View>
+
+      {growth.chartHistory.length > 0 ? (
+        <View style={styles.compareWrap}>
+          <Text style={styles.compareLabel}>前回との比較</Text>
+          <ComparisonBadge comparison={growth.comparison} />
+        </View>
+      ) : null}
+
+      {growth.chartHistory.length >= 2 ? (
+        <Mini1RMChart data={growth.chartHistory} />
+      ) : (
+        <View style={chartStyles.wrap}>
+          <Text style={chartStyles.label}>推定1RM 推移</Text>
+          <View style={chartStyles.empty}>
+            <Text style={chartStyles.emptyText}>
+              {growth.chartHistory.length === 1
+                ? "2回以上記録するとグラフが表示されます"
+                : "重量ありの記録があると推定1RM推移が表示されます"}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <Section title="PR更新履歴">
+        {growth.prHistory.length === 0 ? (
+          <Text style={styles.empty}>まだPRはありません。初回記録はPRになりません。</Text>
+        ) : (
+          growth.prHistory.map((entry, index) => (
+            <View key={`pr-${entry.date}-${index}`} style={styles.prRow}>
+              <View>
+                <Text style={styles.date}>{formatDate(entry.date)}</Text>
+                <Text style={styles.prTag}>🏆 PR</Text>
+              </View>
+              <Text style={styles.rm}>1RM {entry.estimated1RM}kg</Text>
+            </View>
+          ))
+        )}
+      </Section>
 
       <Section title="記録履歴">
         {detailHistory.length === 0 ? (
@@ -123,15 +203,10 @@ export function ExerciseHistoryScreen({
                 {log.isPR ? <Text style={styles.prTag}>🏆 PR</Text> : null}
               </View>
               <View style={styles.right}>
-                {log.estimated1RM ? (
+                {isFinitePositiveNumber(log.estimated1RM) ? (
                   <Text style={styles.rm}>1RM {log.estimated1RM}kg</Text>
                 ) : null}
-                <Text style={styles.setsDetail}>
-                  {log.sets
-                    .filter((s) => s.completed && s.reps > 0)
-                    .map((s) => `${s.weightKg}kg×${s.reps}`)
-                    .join(" / ") || "—"}
-                </Text>
+                <Text style={styles.setsDetail}>{formatSetLine(log.sets)}</Text>
               </View>
             </View>
           ))
@@ -160,6 +235,42 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.textSecondary,
   },
+  statRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  statTile: {
+    flex: 1,
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: 1,
+    borderColor: colors.borderGold,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+  },
+  statLabel: {
+    ...typography.label,
+    color: colors.gold,
+    marginBottom: 4,
+  },
+  statValue: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  statUnit: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  compareWrap: {
+    marginBottom: spacing.md,
+  },
+  compareLabel: {
+    ...typography.label,
+    color: colors.gold,
+    marginBottom: spacing.xs,
+  },
   empty: {
     color: colors.textSecondary,
     fontSize: 15,
@@ -171,6 +282,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSolid,
     borderWidth: 1,
     borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  prRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.surfaceSolid,
+    borderWidth: 1,
+    borderColor: colors.borderGold,
     borderRadius: borderRadius.md,
     padding: spacing.md,
     marginBottom: spacing.sm,
@@ -188,6 +310,8 @@ const styles = StyleSheet.create({
   },
   right: {
     alignItems: "flex-end",
+    flex: 1,
+    marginLeft: spacing.sm,
   },
   rm: {
     color: colors.gold,

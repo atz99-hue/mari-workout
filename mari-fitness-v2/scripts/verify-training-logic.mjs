@@ -72,6 +72,87 @@ assert("50×50は1RMに使わない", estimate1RM(50, 50) === 0);
 assert("10/10/50は外れ値", isOutlier([10, 10, 50]));
 assert("10/10/12は外れ値でない", !isOutlier([10, 10, 12]));
 
+function isFinitePositiveNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function compareExercise(current, previous) {
+  const current1RM = current?.estimated1RM ?? 0;
+  const previous1RM = previous?.estimated1RM ?? 0;
+  if (!current?.estimated1RM || current.estimated1RM <= 0) {
+    return { hasPrevious: !!previous?.estimated1RM, isPR: false, message: "no-current" };
+  }
+  if (current.isPR) {
+    return { hasPrevious: true, isPR: true, current1RM, previous1RM };
+  }
+  if (!previous?.estimated1RM) {
+    return { hasPrevious: false, isPR: false, current1RM, message: "first" };
+  }
+  const delta = Math.round((current1RM - previous1RM) * 10) / 10;
+  return { hasPrevious: true, isPR: false, current1RM, previous1RM, delta1RM: delta };
+}
+
+function getExerciseGrowthSummary(oneRMHistory, detailHistory) {
+  const chartHistory = oneRMHistory.filter((e) => isFinitePositiveNumber(e.estimated1RM));
+  const best1RMRaw = chartHistory.reduce((max, e) => Math.max(max, e.estimated1RM), 0);
+  const best1RM = best1RMRaw > 0 ? best1RMRaw : undefined;
+  let bestWeightKg = 0;
+  let bestReps = 0;
+  for (const { log } of detailHistory) {
+    for (const s of log.sets ?? []) {
+      if (!s.completed) continue;
+      if (!Number.isFinite(s.reps) || !Number.isFinite(s.weightKg)) continue;
+      if (s.reps < 1 || s.reps > 30) continue;
+      if (s.weightKg < 0 || s.weightKg > 500) continue;
+      bestReps = Math.max(bestReps, s.reps);
+      if (s.weightKg > 0) bestWeightKg = Math.max(bestWeightKg, s.weightKg);
+    }
+  }
+  const latest = chartHistory[chartHistory.length - 1];
+  const previous = chartHistory.length >= 2 ? chartHistory[chartHistory.length - 2] : undefined;
+  return {
+    best1RM,
+    bestWeightKg: bestWeightKg > 0 ? bestWeightKg : undefined,
+    bestReps: bestReps > 0 ? bestReps : undefined,
+    comparison: compareExercise(
+      latest ? { estimated1RM: latest.estimated1RM, isPR: latest.isPR } : undefined,
+      previous ? { estimated1RM: previous.estimated1RM } : undefined
+    ),
+    prHistory: [...chartHistory].filter((e) => e.isPR).reverse(),
+    chartHistory,
+  };
+}
+
+const growth = getExerciseGrowthSummary(
+  [
+    { date: "2026-08-01", estimated1RM: 100, isPR: false },
+    { date: "2026-08-08", estimated1RM: Number.NaN, isPR: false },
+    { date: "2026-08-15", estimated1RM: Number.POSITIVE_INFINITY, isPR: false },
+    { date: "2026-08-22", estimated1RM: 110, isPR: true },
+  ],
+  [
+    {
+      log: {
+        sets: [
+          { completed: true, weightKg: 0, reps: 20 },
+          { completed: true, weightKg: 80, reps: 8 },
+          { completed: true, weightKg: Number.NaN, reps: 12 },
+          { completed: true, weightKg: 500, reps: Number.POSITIVE_INFINITY },
+        ],
+      },
+    },
+  ]
+);
+
+assert("成長: NaN/Infinityはグラフから除外", growth.chartHistory.length === 2);
+assert("成長: BEST 1RMは有効値の最大", growth.best1RM === 110);
+assert("成長: 0kgは最高重量に使わない", growth.bestWeightKg === 80);
+assert("成長: 自重の回数は最高回数に含める", growth.bestReps === 20);
+assert("成長: 初回はPR履歴に入らない", growth.prHistory.length === 1 && growth.prHistory[0].date === "2026-08-22");
+assert("成長: 前回比較は最新と一つ前", growth.comparison.current1RM === 110 && growth.comparison.previous1RM === 100);
+assert("成長: 不正値は表示対象外", !isFinitePositiveNumber(Number.NaN) && !isFinitePositiveNumber(Infinity) && !isFinitePositiveNumber(0));
+assert("成長: 初回記録はPR扱いにしない", !buildIsPR(100, 0, 0));
+
 const failed = tests.filter((t) => t.pass === false);
 for (const t of tests) {
   console.log(`${t.pass ? "OK" : "FAIL"}: ${t.name}`);

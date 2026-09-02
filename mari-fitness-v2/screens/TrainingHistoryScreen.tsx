@@ -4,6 +4,7 @@ import { borderRadius, colors, spacing, typography } from "../constants/theme";
 import { getWorkoutById } from "../constants/workouts";
 import { SessionExerciseDetail } from "../types";
 import { formatDate } from "../utils/date";
+import { isFinitePositiveNumber } from "../utils/training";
 
 type SessionSummary = {
   date: string;
@@ -49,7 +50,7 @@ function ExerciseHistoryRow({
           ) : (
             <Text style={styles.setMeta}>{exercise.setsSummary}</Text>
           )}
-          {exercise.estimated1RM ? (
+          {isFinitePositiveNumber(exercise.estimated1RM) ? (
             <Text style={styles.rmText}>推定1RM {exercise.estimated1RM}kg</Text>
           ) : null}
         </View>
