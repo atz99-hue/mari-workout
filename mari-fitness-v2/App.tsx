@@ -3,6 +3,7 @@ import { ActivityIndicator, AppState, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { OpeningScreen } from "./components/OpeningScreen";
+import { PrCutInOverlay } from "./components/PrCutInOverlay";
 import { useAppData } from "./hooks/useAppData";
 import { useMusicSettings } from "./hooks/useMusicSettings";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -38,6 +39,8 @@ export default function App() {
     name: string;
   } | null>(null);
   const [exerciseHistoryBack, setExerciseHistoryBack] = useState<ScreenName>("training");
+  const [prCutInVisible, setPrCutInVisible] = useState(false);
+  const [prCutInKey, setPrCutInKey] = useState(0);
 
   const {
     data,
@@ -165,6 +168,10 @@ export default function App() {
       dedupeKey: "pr-celebration",
       dedupeMs: 5000,
     });
+    setTimeout(() => {
+      setPrCutInKey((key) => key + 1);
+      setPrCutInVisible(true);
+    }, 80);
   }, []);
 
   const openExerciseHistory = (id: string, name: string, back: ScreenName = "training") => {
@@ -309,6 +316,14 @@ export default function App() {
           onMusicVolumeChange={(volume) => void updateMusicSettings({ volume })}
         />
       )}
+
+      {prCutInVisible ? (
+        <PrCutInOverlay
+          key={prCutInKey}
+          gender={data.settings.userGender}
+          onClose={() => setPrCutInVisible(false)}
+        />
+      ) : null}
     </View>
     </SafeAreaProvider>
   );

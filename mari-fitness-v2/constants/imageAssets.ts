@@ -31,6 +31,12 @@ export const OPENING_IMAGES = {
   scene6: require("../assets/opening/MARI_FITNESS_opening_scene_6.webp") as ImageSourcePropType,
 };
 
+/** PRカットイン専用。ユーザーとマリのハイタッチ（既存アバター3種とは別 asset） */
+export const PR_HIGHFIVE_IMAGES: Record<"male" | "female", ImageSourcePropType> = {
+  male: require("../assets/celebrations/pr_highfive_male.png"),
+  female: require("../assets/celebrations/pr_highfive_female.png"),
+};
+
 /** オープニング8シーン用（opening 優先 + training 補完） */
 export const OPENING_SCENE_IMAGES: ImageSourcePropType[] = [
   OPENING_IMAGES.scene1,
