@@ -1,5 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, AppState, StyleSheet, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { OpeningScreen } from "./components/OpeningScreen";
 import { useAppData } from "./hooks/useAppData";
@@ -174,27 +175,31 @@ export default function App() {
 
   if (appPhase === "loading" || !data) {
     return (
-      <View style={styles.loading}>
-        <StatusBar style="light" />
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <SafeAreaProvider>
+        <View style={styles.loading}>
+          <StatusBar style="light" />
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaProvider>
     );
   }
 
   if (appPhase === "opening") {
     return (
-      <View style={styles.root}>
-        <StatusBar style="light" />
-        <OpeningScreen
-          onComplete={handleOpeningComplete}
-          onReady={handleOpeningReady}
-          onSkip={handleOpeningSkip}
-          musicEnabled={musicSettings.enabled}
-          exitRequested={openingExitRequested}
-          playbackProgress={openingProgress}
-          songDurationSec={openingDurationSec}
-        />
-      </View>
+      <SafeAreaProvider>
+        <View style={styles.root}>
+          <StatusBar style="light" />
+          <OpeningScreen
+            onComplete={handleOpeningComplete}
+            onReady={handleOpeningReady}
+            onSkip={handleOpeningSkip}
+            musicEnabled={musicSettings.enabled}
+            exitRequested={openingExitRequested}
+            playbackProgress={openingProgress}
+            songDurationSec={openingDurationSec}
+          />
+        </View>
+      </SafeAreaProvider>
     );
   }
 
@@ -207,6 +212,7 @@ export default function App() {
   );
 
   return (
+    <SafeAreaProvider>
     <View style={styles.root}>
       <StatusBar style="light" />
 
@@ -304,6 +310,7 @@ export default function App() {
         />
       )}
     </View>
+    </SafeAreaProvider>
   );
 }
 
