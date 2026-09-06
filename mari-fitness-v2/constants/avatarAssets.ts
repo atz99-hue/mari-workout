@@ -24,8 +24,8 @@ export const AVATAR_ASSETS = {
   },
   mari_trainer: {
     role: "mari_trainer",
-    /** 小虎のマリトレーナー。female_user / male_user とは別 asset */
-    source: require("../assets/avatars/mari_trainer.webp"),
+    /** 小虎のマリトレーナー（ホーム画面と同じ公式アバター）。ユーザー画像とは別 asset */
+    source: require("../assets/home/welcome_mari_avatar.png"),
     resizeMode: "contain",
   },
 } as const satisfies Record<AvatarRole, AvatarAssetDef>;
