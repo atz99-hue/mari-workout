@@ -4,14 +4,14 @@ AIフィットネスコーチ「子虎マリ」と一緒に、トレーニング
 
 ## 技術スタック
 
-- Expo SDK 54
-- React Native 0.81
+- Expo SDK 57
+- React Native 0.86
 - TypeScript
 - AsyncStorage（ローカルデータ保存）
 
 ## 必要環境
 
-- Node.js 18 以上
+- Node.js 22.13 以上（推奨: 24.x）
 - npm
 
 ## セットアップ

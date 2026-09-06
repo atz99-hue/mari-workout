@@ -8,11 +8,6 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#060608",
     "scheme": "marifitness",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#060608"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.marifitness.app"
@@ -38,7 +33,18 @@
     },
     "owner": "i-shi",
     "plugins": [
-      "expo-audio"
+      "expo-audio",
+      "expo-asset",
+      "expo-sharing",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#060608"
+        }
+      ]
     ]
   }
 }

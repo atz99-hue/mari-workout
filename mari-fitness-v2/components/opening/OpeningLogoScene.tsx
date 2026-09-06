@@ -150,11 +150,11 @@ export function OpeningLogoScene({ scene, active, sceneDurationMs = 5000 }: Prop
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.background,
   },
   photo: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: "100%",
     height: "100%",
   },
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   taglineInnerBorder: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.04)",

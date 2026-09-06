@@ -103,11 +103,11 @@ export function OpeningSceneVisual({ scene, active, sceneDurationMs = 5000 }: Pr
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: colors.background,
   },
   photo: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: "100%",
     height: "100%",
   },
