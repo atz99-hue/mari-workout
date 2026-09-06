@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Keyboard, StyleSheet, Text, View } from "react-native";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ScreenLayout, Section } from "../components/ScreenLayout";
 import { TextField } from "../components/TextField";
@@ -26,6 +26,7 @@ export function WeightScreen({ onBack, weights, settings, onSave }: Props) {
       return;
     }
     onSave(value, memo.trim() || undefined);
+    Keyboard.dismiss();
     setInput("");
     setMemo("");
     Alert.alert("記録完了", `${value} kg を保存しました`);

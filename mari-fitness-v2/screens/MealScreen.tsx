@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Keyboard, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ProgressRing } from "../components/ProgressRing";
 import { ScreenLayout, Section } from "../components/ScreenLayout";
@@ -30,6 +30,7 @@ export function MealScreen({ onBack, meals, settings, onSave, onDelete }: Props)
     const cal = calories ? parseInt(calories, 10) : undefined;
     const pro = protein ? parseInt(protein, 10) : undefined;
     onSave(name.trim(), cal, pro, memo.trim() || undefined);
+    Keyboard.dismiss();
     setName("");
     setCalories("");
     setProtein("");

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { PrimaryButton } from "./PrimaryButton";
 import { ComparisonBadge } from "./ComparisonBadge";
 import { borderRadius, colors, spacing, typography } from "../constants/theme";
@@ -162,6 +162,7 @@ export function ExerciseLogPanel({
         setFeedback({ type: "error", message: "保存に失敗しました。もう一度お試しください" });
         return;
       }
+      Keyboard.dismiss();
       setSets(recordsToDrafts(saved.sets));
       if (saved.isPR) {
         onPersonalRecord?.();

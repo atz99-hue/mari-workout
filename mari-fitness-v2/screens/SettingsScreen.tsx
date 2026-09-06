@@ -1,6 +1,6 @@
 import Slider from "@react-native-community/slider";
 import { useEffect, useState } from "react";
-import { Alert, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Keyboard, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { ScreenLayout, Section } from "../components/ScreenLayout";
 import { TextField } from "../components/TextField";
@@ -81,6 +81,7 @@ export function SettingsScreen({
       dailyCalorieGoal: calories,
       dailyProteinGoal: protein,
     });
+    Keyboard.dismiss();
     Alert.alert("保存しました", "設定を更新しました");
   };
 
@@ -211,7 +212,7 @@ export function SettingsScreen({
               thumbColor={musicEnabled ? colors.gold : colors.textSecondary}
             />
           </View>
-          <Text style={styles.musicHint}>ON / OFF</Text>
+          <Text style={styles.musicHint}>オープニング・BGM・効果音の ON / OFF</Text>
           <Text style={styles.volumeLabel}>音楽音量 {Math.round(musicVolume)}%</Text>
           <Slider
             style={styles.slider}
