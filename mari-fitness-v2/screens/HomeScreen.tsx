@@ -1,18 +1,34 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, ImageSourcePropType, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import { GradientBackground } from "../components/GradientBackground";
 import { HomeBottomNav } from "../components/HomeBottomNav";
-import { MariFitnessLogo } from "../components/MariFitnessLogo";
-import { PremiumCard } from "../components/PremiumCard";
-import { ProgressRing } from "../components/ProgressRing";
-import { borderRadius, colors, gradients, shadows, spacing, typography } from "../constants/theme";
+import { HomeHero } from "../components/HomeHero";
+import {
+  BellIcon,
+  BicepIcon,
+  DumbbellIcon,
+  FlameIcon,
+  GearIcon,
+  PlateIcon,
+  ScaleIcon,
+  SteakIcon,
+  TrophyMiniIcon,
+} from "../components/HomeIcons";
 import { todayKey } from "../storage";
 import { AppSettings, MealEntry, ScreenName, WeightEntry, Workout } from "../types";
 
-/** WELCOME BACK 専用。avatars/ の mari_trainer・male_user・female_user は使わない */
-const WELCOME_MARI = require("../assets/home/welcome_mari.png");
-const WELCOME_USER = require("../assets/home/welcome_user_male.png");
-const WELCOME_MARI_AVATAR = require("../assets/home/welcome_mari_avatar.png");
+const WELCOME_LOGO_M = require("../assets/home/welcome_logo_m.png");
+const ICON_CHECK = require("../assets/home/icon_check_gold.png");
+const ICON_MENU_TRAINING = require("../assets/home/icon_menu_training.png");
+const ICON_MENU_WEIGHT = require("../assets/home/icon_menu_weight.png");
+const ICON_MENU_MEAL = require("../assets/home/icon_menu_meal.png");
+const ICON_MENU_HISTORY = require("../assets/home/icon_menu_history.png");
+const ICON_MENU_PR = require("../assets/home/icon_menu_pr.png");
+const ICON_MENU_CHAT = require("../assets/home/icon_menu_chat.png");
+
+const GOLD = "#E8C36A";
 
 type Props = {
   onNavigate: (screen: ScreenName) => void;
@@ -25,12 +41,6 @@ type Props = {
   isWorkoutOverridden?: boolean;
 };
 
-type MetricRow = {
-  label: string;
-  progress: number;
-  icon: string;
-};
-
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, Math.round(value)));
@@ -41,38 +51,77 @@ function formatWeight(value?: number): string {
   return `${value.toFixed(1)} kg`;
 }
 
-function MetricItem({ label, progress, icon }: MetricRow) {
-  const pct = clampPercent(progress);
+function HomeProgressRing({ progress, size = 108 }: { progress: number; size?: number }) {
+  const stroke = 7;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.min(100, Math.max(0, progress));
+  const offset = circumference - (clamped / 100) * circumference;
+
   return (
-    <View style={styles.metricItem}>
-      <View style={styles.metricTop}>
-        <Text style={styles.metricIcon}>{icon}</Text>
-        <Text style={styles.metricPct}>{pct}%</Text>
-      </View>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <View style={styles.metricTrack}>
-        <View style={[styles.metricFill, { width: `${pct}%` }]} />
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <Svg width={size} height={size}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(255,255,255,0.12)"
+          strokeWidth={stroke}
+          fill="none"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={GOLD}
+          strokeWidth={stroke}
+          fill="none"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          rotation="-90"
+          origin={`${size / 2}, ${size / 2}`}
+        />
+      </Svg>
+      <View style={styles.ringCenter}>
+        <Text style={styles.ringPercent}>{clamped}%</Text>
+        <Text style={styles.ringLabel}>今日</Text>
       </View>
     </View>
   );
 }
 
-function SummaryTile({
-  label,
+function MetricValue({ value, unit }: { value: string; unit?: string }) {
+  return (
+    <Text style={styles.metricValue} numberOfLines={1}>
+      {value}
+      {unit ? <Text style={styles.metricUnit}> {unit}</Text> : null}
+    </Text>
+  );
+}
+
+function HomeMenuRow({
+  icon,
+  title,
+  subtitle,
   value,
-  unit,
   onPress,
 }: {
-  label: string;
-  value: string;
-  unit?: string;
+  icon: ImageSourcePropType;
+  title: string;
+  subtitle: string;
+  value?: string;
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={styles.summaryTile} onPress={onPress} activeOpacity={0.75}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
-      {unit ? <Text style={styles.summaryUnit}>{unit}</Text> : null}
+    <TouchableOpacity style={styles.menuRow} onPress={onPress} activeOpacity={0.75}>
+      <Image source={icon} style={styles.menuIcon} resizeMode="contain" />
+      <View style={styles.menuText}>
+        <Text style={styles.menuTitle}>{title}</Text>
+        <Text style={styles.menuSubtitle}>{subtitle}</Text>
+      </View>
+      {value ? <Text style={styles.menuValue}>{value}</Text> : null}
+      <Text style={styles.menuChevron}>›</Text>
     </TouchableOpacity>
   );
 }
@@ -87,6 +136,10 @@ export function HomeScreen({
   todayWorkout: workout,
   isWorkoutOverridden,
 }: Props) {
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, 54);
+  const bottomInset = Math.max(insets.bottom, 12);
+
   const today = todayKey();
   const todayCalories = todayMeals.reduce((sum, m) => sum + (m.calories ?? 0), 0);
   const todayProtein = todayMeals.reduce((sum, m) => sum + (m.protein ?? 0), 0);
@@ -101,202 +154,231 @@ export function HomeScreen({
     (trainingPct + calProgress + proteinProgress + weightProgress) / 4
   );
 
-  const weightDisplay = latestWeight?.weight ? `${latestWeight.weight.toFixed(1)}` : "—";
-  const weightUnit = latestWeight?.weight ? "kg" : undefined;
-
-  const metrics: MetricRow[] = [
-    { label: "トレーニング", progress: trainingPct, icon: "💪" },
-    { label: "食事", progress: calProgress, icon: "🍽" },
-    { label: "タンパク質", progress: proteinProgress, icon: "🥩" },
-    { label: "体重", progress: weightProgress, icon: "⚖" },
-  ];
+  const weightDisplay = latestWeight?.weight ? latestWeight.weight.toFixed(1) : "—";
+  const calorieDisplay = todayCalories > 0 ? todayCalories.toLocaleString() : "—";
+  const proteinDisplay = todayProtein > 0 ? String(todayProtein) : "—";
 
   return (
     <GradientBackground variant="hero">
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: 28 + bottomInset }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Header */}
-        <View style={styles.header}>
-          <MariFitnessLogo />
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.headerBtn} activeOpacity={0.7}>
-              <Text style={styles.headerBtnIcon}>🔔</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.headerBtn}
-              onPress={() => onNavigate("settings")}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.headerBtnIcon}>⚙</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 2. Welcome — Canonical: assets/reference/welcome_back_canonical.png */}
-        <View style={styles.welcomeCard}>
-          <View style={styles.welcomeHero}>
-            <View style={styles.welcomePurpleGlow} pointerEvents="none" />
-
-            <Image
-              source={WELCOME_MARI}
-              style={styles.welcomeMari}
-              resizeMode="cover"
-              accessibilityLabel="小虎のマリトレーナー"
-            />
-            <Image
-              source={WELCOME_USER}
-              style={styles.welcomeUser}
-              resizeMode="cover"
-              accessibilityLabel="ユーザー"
-            />
-
-            <View style={styles.welcomeSpeech} pointerEvents="none">
-              <Text style={styles.welcomeSpeechText}>
-                今日もいい{"\n"}スタートだね！{"\n"}この調子でいこう！
-              </Text>
+        <View style={[styles.headerBlock, { paddingTop: topInset }]}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerSide}>
+              <TouchableOpacity
+                style={styles.headerBtnBlue}
+                onPress={() => onNavigate("settings")}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <GearIcon size={16} color="#E0E7FF" />
+              </TouchableOpacity>
             </View>
-
-            <View style={styles.welcomeCopy} pointerEvents="none">
-              <Text style={styles.welcomeLabel}>WELCOME BACK</Text>
-              <Text style={styles.welcomeName}>{settings.userName}</Text>
-              <Text style={styles.welcomeMessage}>今日も理想の身体へ。</Text>
-              <View style={styles.welcomeCallout}>
-                <Image
-                  source={WELCOME_MARI_AVATAR}
-                  style={styles.welcomeCalloutAvatar}
-                  resizeMode="cover"
-                  accessibilityLabel="小虎マリ"
-                />
-                <View style={styles.welcomeCalloutBubble}>
-                  <Text style={styles.welcomeCalloutText}>
-                    小虎のマリトレーナーと一緒に頑張ろう！
-                  </Text>
-                </View>
-              </View>
+            <View style={styles.headerLogo} pointerEvents="none">
+              <Image source={WELCOME_LOGO_M} style={styles.headerMark} resizeMode="contain" />
+              <Text style={styles.headerBrand}>MARI FITNESS</Text>
+            </View>
+            <View style={[styles.headerSide, styles.headerSideRight]}>
+              <TouchableOpacity style={styles.headerBtnGold} activeOpacity={0.7}>
+                <BellIcon size={14} color={GOLD} />
+                <View style={styles.headerDot} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerBtnGold}
+                onPress={() => onNavigate("settings")}
+                activeOpacity={0.7}
+              >
+                <GearIcon size={14} color={GOLD} />
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        {/* 3. 今日の達成度 */}
+        <HomeHero key="home-hero-v5" userName={settings.userName} userGender={settings.userGender} />
+
         <View style={styles.achievementCard}>
           <LinearGradient
-            colors={[...gradients.accent]}
+            colors={["#161022", "#0B0A12"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.achievementGradient}
+            style={styles.achievementInner}
           >
-            <View style={styles.achievementHeader}>
-              <View>
-                <Text style={styles.achievementBrand}>MARI FITNESS</Text>
-                <Text style={styles.achievementTitle}>今日の達成度</Text>
-              </View>
-              <ProgressRing progress={overallProgress} size={96} label="TOTAL" />
+            <View style={styles.achievementColLeft}>
+              <Text style={styles.achievementBrand} numberOfLines={1}>
+                MARIFITNESS
+              </Text>
+              <Text style={styles.achievementTitle} numberOfLines={1}>
+                今日の達成度
+              </Text>
+              <Text style={styles.overallValue} numberOfLines={1}>
+                {overallProgress}%
+              </Text>
+              {overallProgress >= 100 ? (
+                <View style={styles.achieveBadge}>
+                  <TrophyMiniIcon size={10} color={GOLD} />
+                  <Text style={styles.achieveBadgeText}>すべての目標を達成しました！</Text>
+                </View>
+              ) : null}
             </View>
 
-            <Text style={styles.overallValue}>{overallProgress}%</Text>
+            <HomeProgressRing progress={overallProgress} size={82} />
 
-            <View style={styles.metricsGrid}>
-              {metrics.map((m) => (
-                <MetricItem key={m.label} {...m} />
-              ))}
+            <View style={styles.achieveDivider} />
+
+            <View style={styles.achievementColRight}>
+              <View style={styles.achieveRow}>
+                <View style={[styles.achieveIconWrap, { backgroundColor: "rgba(139,92,246,0.28)" }]}>
+                  <DumbbellIcon size={12} color="#C4B5FD" />
+                </View>
+                <Text style={styles.achieveRowLabel} numberOfLines={1}>
+                  トレーニング
+                </Text>
+                <MetricValue value={`${trainingPct}`} unit="%" />
+                {trainingPct >= 100 ? <Image source={ICON_CHECK} style={styles.achieveCheck} /> : null}
+              </View>
+              <View style={styles.achieveRow}>
+                <View style={[styles.achieveIconWrap, { backgroundColor: "rgba(74,222,128,0.2)" }]}>
+                  <PlateIcon size={12} color="#86EFAC" />
+                </View>
+                <Text style={styles.achieveRowLabel} numberOfLines={1}>
+                  食事（カロリー）
+                </Text>
+                <MetricValue
+                  value={
+                    todayCalories > 0
+                      ? `${todayCalories.toLocaleString()} / ${settings.dailyCalorieGoal.toLocaleString()}`
+                      : "—"
+                  }
+                  unit={todayCalories > 0 ? "kcal" : undefined}
+                />
+                {calProgress >= 100 ? <Image source={ICON_CHECK} style={styles.achieveCheck} /> : null}
+              </View>
+              <View style={styles.achieveRow}>
+                <View style={[styles.achieveIconWrap, { backgroundColor: "rgba(244,114,182,0.22)" }]}>
+                  <SteakIcon size={12} color="#F9A8D4" />
+                </View>
+                <Text style={styles.achieveRowLabel} numberOfLines={1}>
+                  タンパク質
+                </Text>
+                <MetricValue
+                  value={todayProtein > 0 ? `${todayProtein} / ${settings.dailyProteinGoal}` : "—"}
+                  unit={todayProtein > 0 ? "g" : undefined}
+                />
+                {proteinProgress >= 100 ? <Image source={ICON_CHECK} style={styles.achieveCheck} /> : null}
+              </View>
+              <View style={[styles.achieveRow, styles.achieveRowLast]}>
+                <View style={[styles.achieveIconWrap, { backgroundColor: "rgba(96,165,250,0.22)" }]}>
+                  <ScaleIcon size={12} color="#93C5FD" />
+                </View>
+                <Text style={styles.achieveRowLabel} numberOfLines={1}>
+                  体重記録
+                </Text>
+                <MetricValue
+                  value={latestWeight?.weight ? latestWeight.weight.toFixed(1) : "—"}
+                  unit={latestWeight?.weight ? "kg" : undefined}
+                />
+                {weightLoggedToday ? <Image source={ICON_CHECK} style={styles.achieveCheck} /> : null}
+              </View>
             </View>
           </LinearGradient>
         </View>
 
-        {/* 4. サマリー */}
         <View style={styles.summaryRow}>
-          <SummaryTile
-            label="体重"
-            value={weightDisplay}
-            unit={weightUnit}
+          <TouchableOpacity
+            style={styles.summaryTile}
             onPress={() => onNavigate("weight")}
-          />
+            activeOpacity={0.75}
+          >
+            <View style={[styles.summaryIconWrap, { backgroundColor: "rgba(96,165,250,0.22)" }]}>
+              <ScaleIcon size={16} color="#60A5FA" />
+            </View>
+            <Text style={styles.summaryValue}>
+              {weightDisplay}
+              {latestWeight?.weight ? <Text style={styles.summaryUnit}> kg</Text> : null}
+            </Text>
+            <Text style={styles.summaryLabel}>体重</Text>
+          </TouchableOpacity>
           <View style={styles.summaryDivider} />
-          <SummaryTile
-            label="摂取カロリー"
-            value={todayCalories > 0 ? todayCalories.toLocaleString() : "—"}
-            unit={todayCalories > 0 ? "kcal" : undefined}
+          <TouchableOpacity
+            style={styles.summaryTile}
             onPress={() => onNavigate("meal")}
-          />
+            activeOpacity={0.75}
+          >
+            <View style={[styles.summaryIconWrap, { backgroundColor: "rgba(251,146,60,0.22)" }]}>
+              <FlameIcon size={16} color="#FB923C" />
+            </View>
+            <Text style={styles.summaryValue}>
+              {calorieDisplay}
+              {todayCalories > 0 ? <Text style={styles.summaryUnit}> kcal</Text> : null}
+            </Text>
+            <Text style={styles.summaryLabel}>摂取カロリー</Text>
+          </TouchableOpacity>
           <View style={styles.summaryDivider} />
-          <SummaryTile
-            label="タンパク質"
-            value={todayProtein > 0 ? String(todayProtein) : "—"}
-            unit={todayProtein > 0 ? "g" : undefined}
+          <TouchableOpacity
+            style={styles.summaryTile}
             onPress={() => onNavigate("meal")}
-          />
+            activeOpacity={0.75}
+          >
+            <View style={[styles.summaryIconWrap, { backgroundColor: "rgba(249,168,212,0.22)" }]}>
+              <BicepIcon size={16} color="#F9A8D4" />
+            </View>
+            <Text style={styles.summaryValue}>
+              {proteinDisplay}
+              {todayProtein > 0 ? <Text style={styles.summaryUnit}> g</Text> : null}
+            </Text>
+            <Text style={styles.summaryLabel}>タンパク質</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* 5. MENU */}
         <Text style={styles.menuLabel}>MENU</Text>
 
-        <PremiumCard
-          icon={workout.emoji}
+        <HomeMenuRow
+          icon={ICON_MENU_TRAINING}
           title="今日のトレーニング"
           subtitle={
             isWorkoutOverridden ? `${workout.title}（今日だけ変更）` : workout.title
           }
           value={`${trainingPct}%`}
           onPress={() => (onStartTraining ? onStartTraining() : onNavigate("training"))}
-          accent
-          showArrow
         />
-
-        <PremiumCard
-          icon="⚖"
+        <HomeMenuRow
+          icon={ICON_MENU_WEIGHT}
           title="体重管理"
-          subtitle={
-            latestWeight
-              ? `最新 ${formatWeight(latestWeight.weight)}`
-              : "今日の体重を記録しましょう"
-          }
-          value={weightLoggedToday ? "記録済" : undefined}
+          subtitle="推移グラフで確認"
+          value={latestWeight ? formatWeight(latestWeight.weight) : undefined}
           onPress={() => onNavigate("weight")}
-          showArrow
         />
-
-        <PremiumCard
-          icon="🍽"
+        <HomeMenuRow
+          icon={ICON_MENU_MEAL}
           title="食事管理"
           subtitle={`目標 ${settings.dailyCalorieGoal.toLocaleString()} kcal / ${settings.dailyProteinGoal}g`}
           value={`${calProgress}%`}
           onPress={() => onNavigate("meal")}
-          showArrow
         />
-
-        <PremiumCard
-          icon="📈"
+        <HomeMenuRow
+          icon={ICON_MENU_HISTORY}
           title="進捗・履歴"
-          subtitle="トレーニングセッションと記録を確認"
-          value={trainingPct > 0 ? `${trainingPct}%` : undefined}
+          subtitle="データの推移と記録を確認"
           onPress={() => onNavigate("trainingHistory")}
-          showArrow
         />
-
-        <PremiumCard
-          icon="🏆"
+        <HomeMenuRow
+          icon={ICON_MENU_PR}
           title="実績・自己ベスト"
-          subtitle="PR記録と種目ごとの成長"
+          subtitle="記録と連続日数を確認"
           onPress={() => onNavigate("trainingHistory")}
-          accent
-          showArrow
         />
-
-        <PremiumCard
-          icon="✦"
+        <HomeMenuRow
+          icon={ICON_MENU_CHAT}
           title="AIマリに相談"
-          subtitle="パーソナルフィットネスコーチ"
+          subtitle="マリトレーナーとのチャット"
           onPress={() => onNavigate("chat")}
-          accent
-          showArrow
         />
       </ScrollView>
 
-      {/* 6. Bottom Nav */}
-      <HomeBottomNav active="home" onNavigate={onNavigate} />
+      <HomeBottomNav active="home" onNavigate={onNavigate} bottomInset={bottomInset} />
     </GradientBackground>
   );
 }
@@ -304,291 +386,308 @@ export function HomeScreen({
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 52,
-    paddingBottom: spacing.md,
+    paddingHorizontal: 14,
+    paddingTop: 0,
   },
-
-  /* Header */
-  header: {
+  headerBlock: {
+    marginHorizontal: -14,
+    backgroundColor: "#000000",
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.lg,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  headerSide: {
+    width: 72,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerSideRight: {
+    justifyContent: "flex-end",
+    gap: 6,
+  },
+  headerBtnBlue: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.2,
+    borderColor: "#7DD3FC",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(37, 99, 235, 0.55)",
+  },
+  headerLogo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  headerMark: {
+    width: 24,
+    height: 18,
+  },
+  headerBrand: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 2.4,
   },
   headerActions: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: 6,
+    alignItems: "center",
+    zIndex: 2,
   },
-  headerBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.surfaceSolid,
-    borderWidth: 1,
-    borderColor: colors.border,
+  headerBtnGold: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: GOLD,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.28)",
   },
-  headerBtnIcon: {
-    fontSize: 18,
+  headerDot: {
+    position: "absolute",
+    top: 3,
+    right: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#EF4444",
   },
 
-  /* Welcome — canonical welcome_back_canonical.png */
-  welcomeCard: {
-    borderRadius: borderRadius.xl,
-    overflow: "hidden",
-    marginHorizontal: -spacing.lg,
-    marginBottom: spacing.lg,
-    backgroundColor: "#05050C",
-  },
-  welcomeHero: {
-    height: 318,
-    width: "100%",
-    overflow: "hidden",
-    backgroundColor: "#05050C",
-  },
-  welcomePurpleGlow: {
-    position: "absolute",
-    top: 36,
-    left: "22%",
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: "rgba(120, 60, 200, 0.28)",
-  },
-  welcomeMari: {
-    position: "absolute",
-    left: -6,
-    bottom: 0,
-    width: "42%",
-    height: "100%",
-    zIndex: 2,
-  },
-  welcomeUser: {
-    position: "absolute",
-    right: -10,
-    bottom: 0,
-    width: "40%",
-    height: "100%",
-    zIndex: 2,
-  },
-  welcomeCopy: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 36,
-    alignItems: "center",
-    zIndex: 3,
-    paddingHorizontal: 92,
-  },
-  welcomeLabel: {
-    ...typography.label,
-    color: colors.gold,
-    letterSpacing: 2.4,
-    fontSize: 12,
-    marginBottom: 8,
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.85)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
-  welcomeName: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.9)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-  },
-  welcomeMessage: {
-    fontSize: 13,
-    fontWeight: "400",
-    color: "#FFFFFF",
-    lineHeight: 20,
-    textAlign: "center",
-    marginBottom: 12,
-    textShadowColor: "rgba(0,0,0,0.85)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
-  welcomeSpeech: {
-    position: "absolute",
-    left: 8,
-    bottom: 28,
-    zIndex: 4,
-    backgroundColor: "rgba(28, 10, 52, 0.94)",
-    borderWidth: 1,
-    borderColor: "rgba(168, 90, 255, 0.8)",
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    maxWidth: 128,
-  },
-  welcomeSpeechText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "600",
-    lineHeight: 16,
-  },
-  welcomeCallout: {
-    flexDirection: "row",
-    alignItems: "center",
-    maxWidth: 220,
-  },
-  welcomeCalloutAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1.5,
-    borderColor: "rgba(186, 120, 255, 0.95)",
-    backgroundColor: "#1A1030",
-    zIndex: 1,
-  },
-  welcomeCalloutBubble: {
-    marginLeft: -8,
-    paddingLeft: 16,
-    paddingRight: 12,
-    paddingVertical: 8,
-    backgroundColor: "rgba(42, 18, 72, 0.94)",
-    borderWidth: 1,
-    borderColor: "rgba(168, 90, 255, 0.75)",
-    borderRadius: 16,
-    maxWidth: 186,
-  },
-  welcomeCalloutText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "600",
-    lineHeight: 14,
-  },
-
-  /* Achievement */
   achievementCard: {
-    borderRadius: borderRadius.xl,
+    borderRadius: 20,
     overflow: "hidden",
-    marginBottom: spacing.lg,
+    marginTop: -12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: colors.borderGold,
-    ...shadows.card,
+    borderColor: "rgba(232, 195, 106, 0.48)",
+    zIndex: 6,
+    shadowColor: "#E8C36A",
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
   },
-  achievementGradient: {
-    padding: spacing.lg,
-  },
-  achievementHeader: {
+  achievementInner: {
+    paddingVertical: 14,
+    paddingHorizontal: 10,
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: spacing.sm,
+    alignItems: "center",
+    minHeight: 146,
+  },
+  achievementColLeft: {
+    width: 98,
+    flexGrow: 0,
+    flexShrink: 0,
+    paddingRight: 4,
   },
   achievementBrand: {
-    ...typography.label,
-    color: colors.gold,
-    marginBottom: 4,
+    color: GOLD,
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    marginBottom: 1,
   },
   achievementTitle: {
-    fontSize: 20,
+    fontSize: 13,
     fontWeight: "700",
-    color: colors.text,
-    letterSpacing: 0.3,
+    color: "#FFFFFF",
+    marginBottom: 0,
   },
   overallValue: {
-    fontSize: 42,
+    fontSize: 32,
     fontWeight: "800",
-    color: colors.gold,
-    letterSpacing: -0.5,
-    marginBottom: spacing.lg,
-    lineHeight: 48,
+    color: GOLD,
+    letterSpacing: -1,
+    lineHeight: 34,
   },
-  metricsGrid: {
+  achieveBadge: {
+    marginTop: 4,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(147, 51, 234, 0.42)",
+    borderRadius: 13,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    maxWidth: 138,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  metricItem: {
-    width: "48%",
-    backgroundColor: "rgba(0,0,0,0.22)",
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  metricTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    gap: 4,
   },
-  metricIcon: {
-    fontSize: 16,
-  },
-  metricPct: {
-    color: colors.gold,
-    fontSize: 14,
+  achieveBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 8,
     fontWeight: "700",
+    lineHeight: 12,
   },
-  metricLabel: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginBottom: spacing.sm,
+  ringCenter: {
+    position: "absolute",
+    alignItems: "center",
   },
-  metricTrack: {
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
-    overflow: "hidden",
+  ringPercent: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "800",
   },
-  metricFill: {
-    height: "100%",
-    backgroundColor: colors.accent,
-    borderRadius: 2,
+  ringLabel: {
+    color: "#D4D4D8",
+    fontSize: 10,
+    marginTop: 1,
+  },
+  achieveDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 108,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    marginLeft: 2,
+    marginRight: 6,
+  },
+  achievementColRight: {
+    flex: 1,
+    minWidth: 0,
+  },
+  achieveRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "nowrap",
+    paddingVertical: 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.1)",
+    gap: 4,
+  },
+  achieveRowLast: { borderBottomWidth: 0 },
+  achieveIconWrap: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  achieveRowLabel: {
+    flexGrow: 1,
+    flexShrink: 0,
+    color: "#C4C4CC",
+    fontSize: 10,
+    lineHeight: 13,
+  },
+  metricValue: {
+    color: GOLD,
+    fontSize: 10,
+    fontWeight: "700",
+    lineHeight: 13,
+    flexShrink: 0,
+    textAlign: "right",
+  },
+  metricUnit: {
+    color: "#FFFFFF",
+    fontSize: 9,
+    fontWeight: "500",
+  },
+  achieveCheck: {
+    width: 13,
+    height: 13,
+    marginLeft: 2,
+    flexShrink: 0,
   },
 
-  /* Summary */
   summaryRow: {
     flexDirection: "row",
-    backgroundColor: colors.surfaceSolid,
-    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    backgroundColor: "rgba(16, 12, 28, 0.94)",
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.lg,
-    marginBottom: spacing.xl,
-    ...shadows.card,
+    borderColor: "rgba(232, 195, 106, 0.28)",
+    paddingVertical: 10,
+    minHeight: 68,
+    marginBottom: 14,
   },
   summaryTile: {
     flex: 1,
     alignItems: "center",
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: 2,
   },
-  summaryLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    letterSpacing: 0.6,
+  summaryIconWrap: {
+    width: 26,
+    height: 22,
+    borderRadius: 6,
+    marginBottom: 2,
+    alignItems: "center",
+    justifyContent: "center",
   },
   summaryValue: {
-    color: colors.gold,
-    fontSize: 22,
-    fontWeight: "700",
+    color: GOLD,
+    fontSize: 17,
+    fontWeight: "800",
   },
   summaryUnit: {
-    color: colors.textMuted,
+    color: "#FFFFFF",
     fontSize: 11,
-    marginTop: 2,
+    fontWeight: "500",
+  },
+  summaryLabel: {
+    color: "#D4D4D8",
+    fontSize: 11,
+    marginTop: 1,
   },
   summaryDivider: {
-    width: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.xs,
+    width: StyleSheet.hairlineWidth,
+    height: 36,
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
 
   menuLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-    letterSpacing: 2,
+    color: "#C8C8D0",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 3.4,
+    marginBottom: 6,
+  },
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(18, 14, 30, 0.96)",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    gap: 12,
+    minHeight: 64,
+  },
+  menuIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+  },
+  menuText: { flex: 1 },
+  menuTitle: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  menuSubtitle: {
+    color: "#8B8B96",
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  menuValue: {
+    color: GOLD,
+    fontSize: 16,
+    fontWeight: "800",
+    marginRight: 4,
+  },
+  menuChevron: {
+    color: "#6B6B76",
+    fontSize: 22,
+    fontWeight: "300",
+    lineHeight: 22,
   },
 });
