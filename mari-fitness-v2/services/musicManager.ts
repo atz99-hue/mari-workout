@@ -1,9 +1,15 @@
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
 import { AppStateStatus } from "react-native";
+import { IN_APP_BGM_SOURCE } from "../constants/inAppBgm";
 import { MusicCueId, MUSIC_TRACKS, resolveMusicCue } from "../constants/musicTracks";
 import { DEFAULT_MUSIC_SETTINGS, MusicSettings } from "../storage/musicSettings";
+import { addPlaybackStatusListener } from "./audioPlayerCompat";
 
 const FADE_STEP_MS = 50;
+/** アプリ内BGMは設定音量の100%（オープニング音量は変更しない） */
+const BGM_VOLUME_RATIO = 1.00;
+/** PR / トレーニング開始キュー中は BGM をさらに下げる */
+const BGM_DUCK_RATIO = 0.2;
 
 type PlayCueOptions = {
   dedupeKey?: string;
@@ -18,12 +24,14 @@ type OpeningPlaybackCallbacks = {
 
 class MusicManager {
   private player: AudioPlayer | null = null;
+  private bgmPlayer: AudioPlayer | null = null;
   private settings: MusicSettings = { ...DEFAULT_MUSIC_SETTINGS };
   private settingsLoaded = false;
   private audioModeReady = false;
   private playToken = 0;
   private openingToken = 0;
   private fadeInterval: ReturnType<typeof setInterval> | null = null;
+  private bgmFadeInterval: ReturnType<typeof setInterval> | null = null;
   private stopTimeout: ReturnType<typeof setTimeout> | null = null;
   private statusListener: { remove: () => void } | null = null;
   private appInBackground = false;
@@ -31,6 +39,11 @@ class MusicManager {
   private activeFadeOutMs = 800;
   private isOpeningPlaying = false;
   private openingCallbacks: OpeningPlaybackCallbacks | null = null;
+  /** オープニング終了後に BGM を回したい */
+  private bgmWanted = false;
+  private bgmDucked = false;
+  /** 一度でも再生を始めたら、再開時に seekTo(0) しない */
+  private bgmHasStarted = false;
 
   async initialize(settings?: MusicSettings): Promise<void> {
     if (settings) {
@@ -54,6 +67,7 @@ class MusicManager {
 
     if (this.canPlay()) {
       await this.preloadThemeTrack();
+      this.ensureBgmPlayer();
     }
   }
 
@@ -77,7 +91,7 @@ class MusicManager {
       };
 
       const timeout = setTimeout(() => finish(false), timeoutMs);
-      const subscription = player.addListener("playbackStatusUpdate", (status) => {
+      const subscription = addPlaybackStatusListener(player, (status) => {
         if (status.isLoaded) finish(true);
       });
 
@@ -92,11 +106,16 @@ class MusicManager {
     if (!settings.enabled) {
       this.cancelOpening();
       void this.stop(false);
+      this.pauseBgm();
       return;
     }
 
     if (this.player?.playing && !this.isOpeningPlaying) {
       this.player.volume = this.getEffectiveVolume();
+    }
+    this.applyBgmVolume();
+    if (this.bgmWanted && !this.isOpeningPlaying) {
+      void this.startBgmLoop();
     }
   }
 
@@ -119,6 +138,11 @@ class MusicManager {
 
   private getEffectiveVolume(): number {
     return Math.max(0, Math.min(1, this.settings.volume / 100));
+  }
+
+  private getBgmTargetVolume(): number {
+    const base = this.getEffectiveVolume() * BGM_VOLUME_RATIO;
+    return Math.max(0, Math.min(1, this.bgmDucked ? base * BGM_DUCK_RATIO : base));
   }
 
   private canPlay(): boolean {
@@ -153,6 +177,78 @@ class MusicManager {
       console.warn("[MusicManager] Failed to create player:", error);
       return null;
     }
+  }
+
+  private ensureBgmPlayer(): AudioPlayer | null {
+    if (IN_APP_BGM_SOURCE == null) {
+      return null;
+    }
+
+    try {
+      if (!this.bgmPlayer) {
+        this.bgmPlayer = createAudioPlayer(IN_APP_BGM_SOURCE, {
+          downloadFirst: true,
+        });
+        this.bgmPlayer.loop = true;
+      }
+      return this.bgmPlayer;
+    } catch (error) {
+      console.warn("[MusicManager] Failed to create BGM player:", error);
+      return null;
+    }
+  }
+
+  /** オープニング終了後のアプリ内BGM。オープニング再生仕様は変えない */
+  async startBgmLoop(): Promise<void> {
+    this.bgmWanted = true;
+    if (!this.canPlay() || this.isOpeningPlaying) return;
+
+    try {
+      const player = this.ensureBgmPlayer();
+      if (!player) return;
+      const loaded = await this.waitForPlayerLoaded(player);
+      if (!loaded || !this.canPlay() || this.isOpeningPlaying) return;
+
+      player.loop = true;
+      if (!player.playing) {
+        if (!this.bgmHasStarted) {
+          await player.seekTo(0);
+          this.bgmHasStarted = true;
+        }
+        player.volume = this.getBgmTargetVolume();
+        player.play();
+      } else {
+        player.volume = this.getBgmTargetVolume();
+      }
+    } catch (error) {
+      console.warn("[MusicManager] startBgmLoop failed:", error);
+    }
+  }
+
+  private pauseBgm(): void {
+    const player = this.bgmPlayer;
+    if (!player) return;
+    try {
+      if (player.playing) player.pause();
+      player.volume = 0;
+    } catch {
+      // ignore
+    }
+  }
+
+  private applyBgmVolume(): void {
+    const player = this.bgmPlayer;
+    if (player?.playing) {
+      player.volume = this.getBgmTargetVolume();
+    }
+  }
+
+  private async setBgmDucked(ducked: boolean): Promise<void> {
+    this.bgmDucked = ducked;
+    const player = this.bgmPlayer;
+    if (!player?.playing) return;
+    const to = this.getBgmTargetVolume();
+    await this.fadeBgmVolume(player, player.volume, to, ducked ? 180 : 400);
   }
 
   /** オープニング: タップスキップ時に短いフェードアウトで停止（二重再生防止） */
@@ -222,7 +318,7 @@ class MusicManager {
       player.volume = this.getEffectiveVolume();
       player.play();
 
-      this.statusListener = player.addListener("playbackStatusUpdate", (status) => {
+      this.statusListener = addPlaybackStatusListener(player, (status) => {
         if (token !== this.openingToken) return;
 
         if (status.duration > 0 && this.openingCallbacks?.onProgress) {
@@ -297,14 +393,19 @@ class MusicManager {
     const token = ++this.playToken;
     this.clearTimers();
     this.activeFadeOutMs = cue.fadeOutMs;
+    void this.setBgmDucked(true);
 
     try {
       const player = this.ensurePlayer(cue.trackId);
-      if (!player || token !== this.playToken) return;
+      if (!player || token !== this.playToken) {
+        if (token === this.playToken) void this.setBgmDucked(false);
+        return;
+      }
 
       const loaded = await this.waitForPlayerLoaded(player);
       if (!loaded || token !== this.playToken) {
         console.warn("[MusicManager] Theme track not loaded in time:", cueId);
+        if (token === this.playToken) void this.setBgmDucked(false);
         return;
       }
 
@@ -320,6 +421,7 @@ class MusicManager {
       }, cue.durationSec * 1000);
     } catch (error) {
       console.warn("[MusicManager] playCue failed:", cueId, error);
+      if (token === this.playToken) void this.setBgmDucked(false);
     }
   }
 
@@ -328,7 +430,12 @@ class MusicManager {
 
     this.clearTimers();
     const player = this.player;
-    if (!player) return;
+    if (!player) {
+      if (token === undefined || token === this.playToken) {
+        void this.setBgmDucked(false);
+      }
+      return;
+    }
 
     try {
       if (fadeOut && player.playing) {
@@ -337,6 +444,9 @@ class MusicManager {
       player.pause();
       await player.seekTo(0);
       player.volume = 0;
+      if (token === this.playToken) {
+        void this.setBgmDucked(false);
+      }
     } catch (error) {
       console.warn("[MusicManager] stop failed:", error);
     }
@@ -349,6 +459,11 @@ class MusicManager {
       this.playToken++;
       this.cancelOpening();
       void this.stop(false);
+      this.pauseBgm();
+      return;
+    }
+    if (this.bgmWanted && this.settings.enabled && !this.isOpeningPlaying) {
+      void this.startBgmLoop();
     }
   }
 
@@ -356,6 +471,20 @@ class MusicManager {
     this.playToken++;
     this.cancelOpening();
     this.clearTimers();
+    this.bgmWanted = false;
+    this.bgmHasStarted = false;
+    if (this.bgmFadeInterval) {
+      clearInterval(this.bgmFadeInterval);
+      this.bgmFadeInterval = null;
+    }
+    if (this.bgmPlayer) {
+      try {
+        this.bgmPlayer.remove();
+      } catch {
+        // ignore cleanup errors
+      }
+      this.bgmPlayer = null;
+    }
     if (this.player) {
       try {
         this.player.remove();
@@ -400,6 +529,42 @@ class MusicManager {
         if (step >= steps) {
           if (this.fadeInterval) clearInterval(this.fadeInterval);
           this.fadeInterval = null;
+          resolve();
+        }
+      }, FADE_STEP_MS);
+    });
+  }
+
+  private fadeBgmVolume(
+    player: AudioPlayer,
+    from: number,
+    to: number,
+    durationMs: number
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.bgmFadeInterval) {
+        clearInterval(this.bgmFadeInterval);
+        this.bgmFadeInterval = null;
+      }
+      if (durationMs <= 0) {
+        player.volume = to;
+        resolve();
+        return;
+      }
+
+      const steps = Math.max(1, Math.ceil(durationMs / FADE_STEP_MS));
+      const delta = (to - from) / steps;
+      let current = from;
+      let step = 0;
+
+      this.bgmFadeInterval = setInterval(() => {
+        step += 1;
+        current += delta;
+        player.volume = step >= steps ? to : current;
+
+        if (step >= steps) {
+          if (this.bgmFadeInterval) clearInterval(this.bgmFadeInterval);
+          this.bgmFadeInterval = null;
           resolve();
         }
       }, FADE_STEP_MS);

@@ -116,6 +116,7 @@ export default function App() {
     setOpeningProgress(0);
     setOpeningDurationSec(0);
     setAppPhase("main");
+    void musicManager.startBgmLoop();
   }, []);
 
   const requestOpeningExit = useCallback(() => {
@@ -155,7 +156,6 @@ export default function App() {
   }, [musicSettings.enabled, requestOpeningExit]);
 
   const handleStartTraining = useCallback(() => {
-    void musicManager.playCue("training_start");
     setScreen("training");
   }, []);
 
