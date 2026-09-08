@@ -1,0 +1,18 @@
+# Git の置き場所は mari-workout（このフォルダ）です。
+# アプリ本体は mari-fitness-v2/ にあります。
+
+# 古い別プロジェクト。ディスクには残すが Git には入れない
+/mari-fitness/
+
+# 圧縮コピー。ディスクには残すが Git には入れない
+*.zip
+
+# ローカルの AI / エディタ設定。ディスクには残すが Git には入れない
+.claude/
+
+# アプリ未使用の参考画像。ディスクには残すが Git には入れない
+/mari-fitness-v2/assets/reference/
+
+# OS の作業ファイル
+.DS_Store
+Thumbs.db

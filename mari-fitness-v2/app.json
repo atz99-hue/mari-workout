@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "マリフィットネス",
+    "slug": "mari-fitness-v2",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#060608",
+    "scheme": "marifitness",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.marifitness.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#060608",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.marifitness.app",
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "59f1a8cf-e21e-4711-9ed4-9f5c87b4aedb"
+      }
+    },
+    "owner": "i-shi",
+    "plugins": [
+      "expo-audio",
+      "expo-asset",
+      "expo-sharing",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#060608"
+        }
+      ]
+    ]
+  }
+}
